@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager Team Data</title>
+    <link rel="stylesheet" href="/Assets/CSS/style.css">
+    <script src="/Assets/JS/script.js"></script>
+
+    <!-- Three.js and related libraries -->
+    <script type="module">
+		import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.module.js';
+		import { CSS3DRenderer, CSS3DObject } from 'https://cdn.jsdelivr.net/npm/three@0.152.0/examples/jsm/renderers/CSS3DRenderer.js';
+		import { TrackballControls } from 'https://cdn.jsdelivr.net/npm/three@0.152.0/examples/jsm/controls/TrackballControls.js';
+		import * as TWEEN from 'https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@18.6.4/dist/tween.esm.js';
+
+		// Expose to global scope for easier access in non-module scripts
+		window.THREE = THREE;
+		window.CSS3DRenderer = CSS3DRenderer;
+		window.CSS3DObject = CSS3DObject;
+		window.TrackballControls = TrackballControls;
+		window.TWEEN = TWEEN;
+
+		// Debug logs to verify imports
+		console.log('THREE', THREE);
+		console.log('CSS3DRenderer', CSS3DRenderer);
+		console.log('TrackballControls', TrackballControls);
+		console.log('TWEEN', TWEEN);
+	</script>
+
+    <!-- Import map for module resolution -->
+    <script type="importmap">
+	{
+		"imports": {
+			"three": "https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.module.js"
+		}
+	}
+	</script>
+
+    <!-- Google Identity Services library -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+    <!-- Container for 3D visualization and the display buttons -->
+    <div id="container"></div>
+    <div id="menu">
+        <button id="table">TABLE</button>
+        <button id="sphere">SPHERE</button>
+        <button id="helix">HELIX</button>
+        <button id="grid">GRID</button>
+    </div>
+
+    <script>
+        // Google Sheets API setup
+        const CLIENT_ID = '98753007798-p9fbtjh5s3d2e4tucitkf1ob3ua2jvs7.apps.googleusercontent.com';
+        const SPREADSHEET_ID = '1_hTHkFDjgf1OlvSP_Z01x1qglrF2pFrOZSil_qNPqIs';
+        const RANGE = 'A2:F';
+        const SCOPES = 'https://www.googleapis.com/auth/spreadsheets.readonly';
+
+        let tokenClient;
+        let access_token = null;
+
+        // QAuth Authorization
+        function initAuth() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: (tokenResponse) => {
+                    if (tokenResponse && tokenResponse.access_token) {
+                        access_token = tokenResponse.access_token;
+
+                        fetchSheetValues().then(table => {
+                            window.table = table;
+                            init();
+                            animate();
+                        }).catch(err => console.error(err));
+                    } else {
+                        console.error('No access token in response', tokenResponse);
+                    }
+                }
+            });
+        }
+
+        // Request authorization and load data
+        function requestAuthAndLoad() {
+            if (!tokenClient) initAuth();
+            tokenClient.requestAccessToken();
+        }
+
+        // Retrieve and parse Google Sheets data
+        async function fetchSheetValues() {
+            if (!access_token) throw new Error('No access token. Call requestAuthAndLoad() first.');
+
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(RANGE)}`;
+            const res = await fetch(url, {
+                headers: { Authorization: 'Bearer ' + access_token }
+            });
+            const data = await res.json();
+            const rows = data.values || [];
+
+            // Parse rows into a flat table array
+            const table = [];
+            for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    table.push(
+                        row[0] || '',  // Name
+                        row[1] || '',  // Photo
+                        row[2] || '',  // Age
+                        row[3] || '',  // Country
+                        row[4] || '',  // Interest
+                        row[5] || ''   // Net Worth
+                    );
+                }
+                return table;        
+            }
+
+        // Initialize and run the 3D visualization
+        window.addEventListener('DOMContentLoaded', () => {
+        initAuth();
+        const stored = sessionStorage.getItem('g_access_token');
+        if (stored) {
+            access_token = stored;
+            console.log('Found stored access token in sessionStorage');
+            fetchSheetValues().then(table => {
+                window.table = table;
+                console.log('Loaded table from Sheets:', table.length);
+                init();
+                animate();
+            }).catch(err => console.error(err));
+        }
+        });
+
+        let camera, scene, renderer;
+        let controls;
+
+        const objects = [];
+        const targets = { table: [], sphere: [], helix: [], grid: [] };
+
+        // Helper to parse net worth string to number
+        function parseNetWorth(value) {
+            if (!value) return 0;
+            return Number(value.replace(/\$/g, '').replace(/,/g, ''))
+        }
+
+        // Initialize 3D scene
+        function init() {
+            // Set up camera
+            camera = new THREE.PerspectiveCamera( 40, window.innerWidth / window.innerHeight, 1, 10000 );
+            camera.position.z = 4500;
+
+            scene = new THREE.Scene();
+
+            // Data from Google Sheets
+            for ( let i = 0; i < table.length; i += 6 ) {
+                const element = document.createElement( 'div' );
+                element.className = 'element';
+                element.style.backgroundColor = 'rgba(0,127,127,' + (Math.random() * 0.5 + 0.25) + ')';
+
+                const name = document.createElement( 'div' );
+                name.className = 'name';
+                name.textContent = table[ i ];
+                element.appendChild( name );
+
+                const image = document.createElement( 'img' );
+                image.className = 'image';
+                image.src = table[ i + 1 ];
+                element.appendChild( image );
+
+                const age = document.createElement( 'div' );
+                age.className = 'age';
+                age.textContent = table[ i + 2 ];
+                element.appendChild( age );
+
+                const country = document.createElement( 'div' );
+                country.className = 'country';
+                country.textContent = table[ i + 3 ];
+                element.appendChild( country );
+
+                const interest = document.createElement( 'div' );
+                interest.className = 'interest';
+                interest.innerHTML = table[ i + 4 ];
+                element.appendChild( interest );
+
+                const netWorth = document.createElement( 'div' );
+                netWorth.className = 'networth';
+                netWorth.textContent = table[ i + 5 ];
+                const netWorthValue = parseNetWorth(table[ i + 5 ]);
+                if (netWorthValue < 100000) {
+                    element.style.backgroundColor = 'red';
+                } 
+                else if (netWorthValue >= 100000 && netWorthValue < 200000) {
+                    element.style.backgroundColor = 'orange';
+                } else if (netWorthValue >= 200000) {
+                    element.style.backgroundColor = 'green';
+                }
+                element.appendChild( netWorth );
+
+                const objectCSS = new CSS3DObject( element );
+                objectCSS.position.x = Math.random() * 4000 - 2000;
+                objectCSS.position.y = Math.random() * 4000 - 2000;
+                objectCSS.position.z = Math.random() * 4000 - 2000;
+                scene.add( objectCSS );
+
+                objects.push( objectCSS );
+
+                // Display in "TABLE" layout
+                const object = new THREE.Object3D();
+                object.position.x = (((i / 6) % 20)- 20 / 2) * 140;
+                object.position.y = (10 / 2 - Math.floor((i / 6) / 20)) * 180;
+                object.position.z = 0;
+                targets.table.push( object );
+            }
+
+            // Display in "SPHERE" layout
+            const vector = new THREE.Vector3();
+
+            for ( let i = 0, l = objects.length; i < l; i ++ ) {
+
+                const phi = Math.acos( - 1 + ( 2 * i ) / l );
+                const theta = Math.sqrt( l * Math.PI ) * phi;
+                const object = new THREE.Object3D();
+
+                object.position.setFromSphericalCoords( 800, phi, theta );
+                vector.copy( object.position ).multiplyScalar( 2 );
+                object.lookAt( vector );
+
+                targets.sphere.push( object );
+            }
+
+            // Display in "HELIX" layout
+            for ( let i = 0, l = objects.length; i < l; i ++ ) {
+                const theta = i * 0.175 + Math.PI;
+                const y = - ( i * 8 ) + 450;
+                const object = new THREE.Object3D();
+
+                const thetaOffset = (i % 2 === 0) ? 0 : Math.PI;
+                object.position.setFromCylindricalCoords( 900, theta + thetaOffset, y );
+
+
+                vector.x = object.position.x * 2;
+                vector.y = object.position.y;
+                vector.z = object.position.z * 2;
+
+                object.lookAt( vector );
+
+                targets.helix.push( object );
+            }
+
+            // Display in "GRID" layout
+            for ( let i = 0; i < objects.length; i ++ ) {
+                const object = new THREE.Object3D();
+
+                object.position.x = ( ( i % 5 ) * 400 ) - 800;
+                object.position.y = ( - ( Math.floor( i / 5 ) % 4 ) * 400 ) + 800;
+                object.position.z = ( Math.floor( i / 20 ) % 10 ) * 1000 - 2000;
+
+                targets.grid.push( object );
+            }
+
+            // Renderer setup
+            renderer = new CSS3DRenderer();
+            renderer.setSize( window.innerWidth, window.innerHeight );
+            document.getElementById( 'container' ).appendChild( renderer.domElement );
+
+            // Controls setup
+            controls = new TrackballControls( camera, renderer.domElement );
+            controls.minDistance = 800;
+            controls.maxDistance = 15000;
+            controls.addEventListener( 'change', render );
+
+            // Button event listeners
+            const buttonTable = document.getElementById( 'table' );
+            buttonTable.addEventListener( 'click', function () {
+                transform( targets.table, 2000 );
+            });
+
+            const buttonSphere = document.getElementById( 'sphere' );
+            buttonSphere.addEventListener( 'click', function () {
+                transform( targets.sphere, 2000 );
+            });
+
+            const buttonHelix = document.getElementById( 'helix' );
+            buttonHelix.addEventListener( 'click', function () {
+                transform( targets.helix, 2000 );
+            });
+
+            const buttonGrid = document.getElementById( 'grid' );
+            buttonGrid.addEventListener( 'click', function () {
+                transform( targets.grid, 2000 );
+            } );
+
+            transform( targets.table, 2000 );
+
+            window.addEventListener( 'resize', onWindowResize );
+        }
+
+        // Transform objects to target layout
+        function transform( targets, duration ) {
+            TWEEN.removeAll();
+
+            for ( let i = 0; i < objects.length; i ++ ) {
+                const object = objects[ i ];
+                const target = targets[ i ];
+
+                new TWEEN.Tween( object.position )
+                    .to( { x: target.position.x, y: target.position.y, z: target.position.z }, Math.random() * duration + duration )
+                    .easing( TWEEN.Easing.Exponential.InOut )
+                    .start();
+
+                new TWEEN.Tween( object.rotation )
+                    .to( { x: target.rotation.x, y: target.rotation.y, z: target.rotation.z }, Math.random() * duration + duration )
+                    .easing( TWEEN.Easing.Exponential.InOut )
+                    .start();
+            }
+
+            new TWEEN.Tween( this )
+                .to( {}, duration * 2 )
+                .onUpdate( render )
+                .start();
+        }
+
+        // Handle window resize event
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize( window.innerWidth, window.innerHeight );
+            render();
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame( animate );
+
+            TWEEN.update();
+
+            controls.update();
+        }
+
+        // Render the scene
+        function render() {
+            renderer.render( scene, camera );
+        }
+    </script>
+</body>
+</html>
