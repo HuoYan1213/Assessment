@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manager Team Data</title>
     <link rel="stylesheet" href="../Assets/CSS/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="../Assets/JS/script.js"></script>
 
     <!-- Three.js and related libraries -->
@@ -38,16 +39,18 @@
 	</script>
 
     <!-- Google Identity Services library -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
 </head>
 <body>
     <!-- Container for 3D visualization and the display buttons -->
+    <button onclick="logout()" id="logout"><i class="fa-solid fa-arrow-right-from-bracket"></i>Logout</button>
     <div id="container"></div>
     <div id="menu">
         <button id="table">TABLE</button>
         <button id="sphere">SPHERE</button>
         <button id="helix">HELIX</button>
         <button id="grid">GRID</button>
+        <button id="tetrahedron">TETRAHEDRON</button>
     </div>
 
     <script>
@@ -116,18 +119,18 @@
 
         // Initialize and run the 3D visualization
         window.addEventListener('DOMContentLoaded', () => {
-        initAuth();
-        const stored = sessionStorage.getItem('g_access_token');
-        if (stored) {
-            access_token = stored;
-            console.log('Found stored access token in sessionStorage');
-            fetchSheetValues().then(table => {
-                window.table = table;
-                console.log('Loaded table from Sheets:', table.length);
-                init();
-                animate();
-            }).catch(err => console.error(err));
-        }
+            initAuth();
+            const stored = sessionStorage.getItem('g_access_token');
+            if (stored) {
+                access_token = stored;
+                console.log('Found stored access token in sessionStorage');
+                fetchSheetValues().then(table => {
+                    window.table = table;
+                    console.log('Loaded table from Sheets:', table.length);
+                    init();
+                    animate();
+                }).catch(err => console.error(err));
+            }
         });
 
         let camera, scene, renderer;
@@ -236,7 +239,6 @@
                 const thetaOffset = (i % 2 === 0) ? 0 : Math.PI;
                 object.position.setFromCylindricalCoords( 900, theta + thetaOffset, y );
 
-
                 vector.x = object.position.x * 2;
                 vector.y = object.position.y;
                 vector.z = object.position.z * 2;
@@ -255,6 +257,67 @@
                 object.position.z = ( Math.floor( i / 20 ) % 10 ) * 1000 - 2000;
 
                 targets.grid.push( object );
+            }
+
+            // Display in "Tetrahedron" layout
+            targets.tetrahedron = [];
+
+            const faceMeta = [
+                { row: 0, col: 0, max: 1 },
+                { row: 0, col: 0, max: 1 },
+                { row: 0, col: 0, max: 1 },
+                { row: 0, col: 0, max: 1 }
+            ];
+
+            for ( let i = 0; i < objects.length; i ++ ) {
+                const object = new THREE.Object3D();
+
+                const section = i % 4; 
+                const meta = faceMeta[section];
+
+                const xStep = 280;
+                const yStep = 180;
+
+                const xLocal = (meta.col - (meta.max - 1) / 2) * xStep;
+                const yLocal = - (meta.row * yStep) + 600; 
+
+                meta.col++;
+                if (meta.col >= meta.max) {
+                    meta.col = 0;
+                    meta.row++;    
+                    meta.max++; 
+                }
+
+                // Bottom Side Control
+                if (section === 0) {
+                    object.position.set(xLocal, -800, yLocal + 450); 
+                    object.rotation.x = - Math.PI / 2; 
+                    object.rotation.z = Math.PI;
+                } 
+                // Top 3 Sides Control
+                else {
+                    const pivot = new THREE.Object3D();
+                    const holder = new THREE.Object3D();
+                    const card = new THREE.Object3D();
+
+                    const angle = (section - 1) * (Math.PI * 2) / 3;
+
+                    card.position.set(xLocal, yLocal, 0);
+
+                    holder.rotation.x = Math.PI / 7; 
+                    holder.position.z = -350;
+                    holder.position.y = 200; 
+
+                    holder.add(card);
+                    pivot.rotation.y = angle;
+                    pivot.add(holder);
+
+                    pivot.updateMatrixWorld(true);
+                    object.position.setFromMatrixPosition(card.matrixWorld);
+                    object.rotation.setFromRotationMatrix(card.matrixWorld);
+                }
+
+                targets.tetrahedron.push( object );
             }
 
             // Renderer setup
@@ -287,7 +350,12 @@
             const buttonGrid = document.getElementById( 'grid' );
             buttonGrid.addEventListener( 'click', function () {
                 transform( targets.grid, 2000 );
-            } );
+            });
+
+            const buttonTetrahedron = document.getElementById( 'tetrahedron' );
+            buttonTetrahedron.addEventListener( 'click', function () {
+                transform( targets.tetrahedron, 2000 );
+            })
 
             transform( targets.table, 2000 );
 
@@ -341,10 +409,18 @@
         function render() {
             renderer.render( scene, camera );
         }
+
+        // Logout
+        function logout() {
+            sessionStorage.clear();
+            localStorage.clear();
+
+            if (google?.accounts?.id) {
+                google.accounts.id.disableAutoSelect();
+            }
+
+            window.location.href = "../index.html";
+        }
     </script>
 </body>
-
 </html>
-
-
-
