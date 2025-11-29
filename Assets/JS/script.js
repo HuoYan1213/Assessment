@@ -3,7 +3,7 @@
 
 	// Initialize menu buttons effect for 3D layout transformations
 	function initMenuButtons() {
-		const ids = [ 'table', 'sphere', 'helix', 'grid' ];
+		const ids = [ 'table', 'sphere', 'helix', 'grid', 'tetrahedron' ];
 		const buttons = ids.map(id => document.getElementById(id)).filter(Boolean);
 		if (!buttons.length) return; // nothing to do
 
